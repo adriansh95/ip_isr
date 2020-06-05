@@ -64,9 +64,11 @@ class IsrCalib(abc.ABC):
     _SCHEMA = 'NO SCHEMA'
     _VERSION = 0
 
-    def __init__(self, detectorName=None, detectorSerial=None, detector=None, log=None, **kwargs):
+    def __init__(self, detectorName=None, detectorSerial=None, detectorId=None,
+                 detector=None, log=None, **kwargs):
         self._detectorName = detectorName
         self._detectorSerial = detectorSerial
+        self._detectorId = detectorId
         self.setMetadata(PropertyList())
 
         # Define the required attributes for this calibration.
