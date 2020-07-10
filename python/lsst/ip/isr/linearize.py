@@ -65,7 +65,7 @@ class Linearizer(IsrCalib):
     _SCHEMA = 'Gen3 Linearizer'
     _VERSION = 1.0
 
-    def __init__(self, table=None, log=None, **kwargs):
+    def __init__(self, table=None, **kwargs):
         self.hasLinearity = False
         self.override = False
 
@@ -78,9 +78,7 @@ class Linearizer(IsrCalib):
         self.fitParamsErr = dict()
         self.linearityFitReducedChiSquared = dict()
 
-        self.override = override
         self.populated = False
-        self.log = log
 
         self.tableData = None
         if table is not None:
@@ -269,7 +267,7 @@ class Linearizer(IsrCalib):
 
             fitParams = record['FIT_PARAMS'] if 'FIT_PARAMS' in record else None
             fitParamsErr = record['FIT_PARAMS_ERR'] if 'FIT_PARAMS_ERR' in record else None
-            fitChiSq = record['RED_CHI_SQ'] if 'RED_CHI_SQ' in record  else None
+            fitChiSq = record['RED_CHI_SQ'] if 'RED_CHI_SQ' in record else None
 
             inDict['amplifiers'][ampName] = {
                 'linearityType': record['TYPE'],
@@ -278,7 +276,7 @@ class Linearizer(IsrCalib):
                                        Extent2I(record['BBOX_DX'], record['BBOX_DY'])),
                 'fitParams': fitParams,
                 'fitParamsErr': fitParamsErr,
-                'fitChiSq': fitChiSq,                
+                'fitChiSq': fitChiSq,
             }
 
         if len(tableList) > 1:
