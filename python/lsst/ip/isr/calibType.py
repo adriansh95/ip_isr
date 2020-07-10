@@ -50,36 +50,40 @@ class IsrCalib(abc.ABC):
 
     Parameters
     ----------
-    detectorName : `str`, optional
-        Name of the detector this calibration is for.
-    detectorSerial : `str`, optional
-        Identifier for the detector.
+    camera : `lsst.afw.cameraGeom.Camera`, optional
+        Camera to extract metadata from.
     detector : `lsst.afw.cameraGeom.Detector`, optional
         Detector to extract metadata from.
     log : `lsst.log.Log`, optional
         Log for messages.
-
     """
     _OBSTYPE = 'generic'
     _SCHEMA = 'NO SCHEMA'
     _VERSION = 0
 
-    def __init__(self, detectorName=None, detectorSerial=None, detectorId=None,
-                 detector=None, log=None, **kwargs):
-        self._detectorName = detectorName
-        self._detectorSerial = detectorSerial
-        self._detectorId = detectorId
+    def __init__(self, camera=None, detector=None, log=None, **kwargs):
+        self._instrument = None
+        self._raftName = None
+        self._slotName = None
+        self._detectorName = None
+        self._detectorSerial = None
+        self._detectorId = None
+        self._filter = None
+        self._calibId = None
+
         self.setMetadata(PropertyList())
 
         # Define the required attributes for this calibration.
         self.requiredAttributes = set(['_OBSTYPE', '_SCHEMA', '_VERSION'])
-        self.requiredAttributes.update(['_detectorName', '_detectorSerial', '_metadata'])
+        self.requiredAttributes.update(['_instrument', '_raftName', '_slotName',
+                                        '_detectorName', '_detectorSerial', '_detectorId',
+                                        '_filter', '_calibId', '_metadata'])
 
         self.log = log if log else Log.getLogger(__name__.partition(".")[2])
 
         if detector:
             self.fromDetector(detector)
-        self.updateMetadata(setDate=False)
+        self.updateMetadata(camera=camera, detector=detector, setDate=False)
 
     def __str__(self):
         return f"{self.__class__.__name__}(obstype={self._OBSTYPE}, detector={self._detectorName}, )"
@@ -108,7 +112,6 @@ class IsrCalib(abc.ABC):
         self._requiredAttributes = value
 
     def getMetadata(self):
-
         """Retrieve metadata associated with this calibration.
 
         Returns
@@ -137,11 +140,21 @@ class IsrCalib(abc.ABC):
         self._metadata[self._OBSTYPE + "_SCHEMA"] = self._SCHEMA
         self._metadata[self._OBSTYPE + "_VERSION"] = self._VERSION
 
-    def updateMetadata(self, setDate=False, **kwargs):
+    def updateMetadata(self, camera=None, detector=None, filterName=None,
+                       setCalibId=False, setDate=False,
+                       **kwargs):
         """Update metadata keywords with new values.
 
         Parameters
         ----------
+        camera : `lsst.afw.cameraGeom.Camera`, optional
+            Reference camera to use to set _instrument field.
+        detector : `lsst.afw.cameraGeom.Detector`, optional
+            Reference detector to use to set _detector* fields.
+        filterName : `str`, optional
+            Filter name to assign to this calibration.
+        setCalibId : `bool` optional
+            Construct the _calibId field from other fields.
         setDate : `bool`, optional
             Ensure the metadata CALIBDATE fields are set to the current datetime.
         kwargs : `dict` or `collections.abc.Mapping`, optional
@@ -150,14 +163,45 @@ class IsrCalib(abc.ABC):
         mdOriginal = self.getMetadata()
         mdSupplemental = dict()
 
-        self._metadata["DETECTOR"] = self._detectorName
-        self._metadata["DETECTOR_SERIAL"] = self._detectorSerial
+        if camera:
+            self._instrument = camera.getName()
+
+        if detector:
+            self._detectorName = detector.getName()
+            self._detectorSerial = detector.getSerial()
+            self._detectorId = detector.getId()
+            if "_" in self._detectorName:
+                (self._raftName, self._slotName) = self._detectorName.split("_")
+
+        if filterName:
+            # If set via:
+            # exposure.getInfo().getFilter().getName()
+            # then this will hold the abstract filter.
+            self._filter = filterName
+
+        if setCalibId:
+            values = []
+            values.append(f"instrument={self._instrument}") if self._instrument
+            values.append(f"raftName={self._raftName}") if self._raftName
+            values.append(f"detectorName={self._detectorName}") if self._detectorName
+            values.append(f"detector={self.detector}") if self._detector
+            values.append(f"filter={self._filter}") if self._filter
+            self._calibId = " ".join(values)
 
         if setDate:
             date = datetime.datetime.now()
             mdSupplemental['CALIBDATE'] = date.isoformat()
             mdSupplemental['CALIB_CREATION_DATE'] = date.date().isoformat()
             mdSupplemental['CALIB_CREATION_TIME'] = date.time().isoformat()
+
+        self._metadata["INSTRUME"] = self._instrument
+        self._metadata["RAFTNAME"] = self._raftName
+        self._metadata["SLOTNAME"] = self._slotName
+        self._metadata["DETECTOR"] = self._detectorId
+        self._metadata["DET_NAME"] = self._detectorName
+        self._metadata["DET_SER"] = self._detectorSerial
+        self._metadata["FILTER"] = self._filter
+        self._metadata["CALIB_ID"] = self._calibId
 
         mdSupplemental.update(kwargs)
         mdOriginal.update(mdSupplemental)
