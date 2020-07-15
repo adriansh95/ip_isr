@@ -61,13 +61,14 @@ class IsrCalib(abc.ABC):
     _SCHEMA = 'NO SCHEMA'
     _VERSION = 0
 
-    def __init__(self, camera=None, detector=None, log=None, **kwargs):
+    def __init__(self, camera=None, detector=None,
+                 detectorName=None, detectorId=None, log=None, **kwargs):
         self._instrument = None
         self._raftName = None
         self._slotName = None
-        self._detectorName = None
+        self._detectorName = detectorName
         self._detectorSerial = None
-        self._detectorId = None
+        self._detectorId = detectorId
         self._filter = None
         self._calibId = None
 
@@ -181,11 +182,11 @@ class IsrCalib(abc.ABC):
 
         if setCalibId:
             values = []
-            values.append(f"instrument={self._instrument}") if self._instrument
-            values.append(f"raftName={self._raftName}") if self._raftName
-            values.append(f"detectorName={self._detectorName}") if self._detectorName
-            values.append(f"detector={self.detector}") if self._detector
-            values.append(f"filter={self._filter}") if self._filter
+            values.append(f"instrument={self._instrument}") if self._instrument else None
+            values.append(f"raftName={self._raftName}") if self._raftName else None
+            values.append(f"detectorName={self._detectorName}") if self._detectorName else None
+            values.append(f"detector={self.detector}") if self._detector else None
+            values.append(f"filter={self._filter}") if self._filter else None
             self._calibId = " ".join(values)
 
         if setDate:
@@ -194,14 +195,14 @@ class IsrCalib(abc.ABC):
             mdSupplemental['CALIB_CREATION_DATE'] = date.date().isoformat()
             mdSupplemental['CALIB_CREATION_TIME'] = date.time().isoformat()
 
-        self._metadata["INSTRUME"] = self._instrument
-        self._metadata["RAFTNAME"] = self._raftName
-        self._metadata["SLOTNAME"] = self._slotName
-        self._metadata["DETECTOR"] = self._detectorId
-        self._metadata["DET_NAME"] = self._detectorName
-        self._metadata["DET_SER"] = self._detectorSerial
-        self._metadata["FILTER"] = self._filter
-        self._metadata["CALIB_ID"] = self._calibId
+        self._metadata["INSTRUME"] = self._instrument if self._instrument else None
+        self._metadata["RAFTNAME"] = self._raftName if self._raftName else None
+        self._metadata["SLOTNAME"] = self._slotName if self._slotName else None
+        self._metadata["DETECTOR"] = self._detectorId if self._detectorId else None
+        self._metadata["DET_NAME"] = self._detectorName if self._detectorName else None
+        self._metadata["DET_SER"] = self._detectorSerial if self._detectorSerial else None
+        self._metadata["FILTER"] = self._filter if self._filter else None
+        self._metadata["CALIB_ID"] = self._calibId if self._calibId else None
 
         mdSupplemental.update(kwargs)
         mdOriginal.update(mdSupplemental)
@@ -495,16 +496,15 @@ class IsrProvenance(IsrCalib):
     """
     _OBSTYPE = 'IsrProvenance'
 
-    def __init__(self, instrument="unknown", calibType="unknown",
+    def __init__(self, calibType="unknown",
                  **kwargs):
-        self.instrument = instrument
         self.calibType = calibType
         self.dimensions = set()
         self.dataIdList = list()
 
         super().__init__(**kwargs)
 
-        self.requiredAttributes.update(['instrument', 'calibType', 'dimensions', 'dataIdList'])
+        self.requiredAttributes.update(['calibType', 'dimensions', 'dataIdList'])
 
     def __str__(self):
         return f"{self.__class__.__name__}(obstype={self._OBSTYPE}, calibType={self.calibType}, )"
@@ -523,10 +523,6 @@ class IsrProvenance(IsrCalib):
         kwargs : `dict` or `collections.abc.Mapping`, optional
             Other keyword parameters to set in the metadata.
         """
-        kwargs["DETECTOR"] = self._detectorName
-        kwargs["DETECTOR_SERIAL"] = self._detectorSerial
-
-        kwargs['INSTRUME'] = self.instrument
         kwargs['calibType'] = self.calibType
         super().updateMetadata(setDate=setDate, **kwargs)
 
@@ -562,9 +558,9 @@ class IsrProvenance(IsrCalib):
         metadata = table.meta
         inDict = dict()
         inDict['metadata'] = metadata
-        inDict['detectorName'] = metadata['DETECTOR']
-        inDict['detectorSerial'] = metadata['DETECTOR_SERIAL']
-        inDict['instrument'] = metadata['INSTRUME']
+        inDict['detectorName'] = metadata.get('DET_NAME', None)
+        inDict['detectorSerial'] = metadata.get('DET_SER', None)
+        inDict['instrument'] = metadata.get('INSTRUME', None)
         inDict['calibType'] = metadata['calibType']
         inDict['dimensions'] = set()
         inDict['dataIdList'] = list()
@@ -599,9 +595,12 @@ class IsrProvenance(IsrCalib):
         """
         calib = cls()
         calib.updateMetadata(setDate=False, **dictionary['metadata'])
-        calib._detectorName = dictionary['detectorName']
-        calib._detectorSerial = dictionary['detectorSerial']
-        calib.instrument = dictionary['instrument']
+        calib._detectorName = dictionary.get('detectorName',
+                                             dictionary['metadata'].get('DET_NAME', None))
+        calib._detectorSerial = dictionary.get('detectorSerial',
+                                               dictionary['metadata'].get('DET_SER', None))
+        calib._instrument = dictionary.get('instrument',
+                                           dictionary['metadata'].get('INSTRUME', None))
         calib.calibType = dictionary['calibType']
         calib.dimensions = set(dictionary['dimensions'])
         calib.dataIdList = dictionary['dataIdList']
@@ -625,7 +624,7 @@ class IsrProvenance(IsrCalib):
         outDict['metadata'] = metadata
         outDict['detectorName'] = self._detectorName
         outDict['detectorSerial'] = self._detectorSerial
-        outDict['instrument'] = self.instrument
+        outDict['instrument'] = self._instrument
         outDict['calibType'] = self.calibType
         outDict['dimensions'] = list(self.dimensions)
         outDict['dataIdList'] = self.dataIdList
@@ -648,6 +647,7 @@ class IsrProvenance(IsrCalib):
         self.updateMetadata(setDate=True)
         catalog = Table(rows=self.dataIdList,
                         names=self.dimensions)
-        catalog.meta = self.getMetadata().toDict()
+        filteredMetadata = {k: v for k, v in self.getMetadata().toDict().items() if v is not None}
+        catalog.meta = filteredMetadata
         tableList.append(catalog)
         return tableList
